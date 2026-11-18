@@ -9,6 +9,11 @@ def main():
     parser.add_argument("--db", default="demo.sqlite3")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("status")
+    commands.add_parser("notices")
+    notice = commands.add_parser("notice")
+    notice.add_argument("service")
+    notice.add_argument("title")
+    notice.add_argument("message")
     create = commands.add_parser("create")
     create.add_argument("service")
     create.add_argument("title")
@@ -23,6 +28,10 @@ def main():
     try:
         if args.command == "create":
             result = store.create(args.service, args.title, args.message)
+        elif args.command == "notice":
+            result = store.publish_notice(args.service, args.title, args.message)
+        elif args.command == "notices":
+            result = store.notices()
         elif args.command == "update":
             result = store.transition(args.id, args.state, args.message, args.version)
         else:

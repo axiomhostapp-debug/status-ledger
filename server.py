@@ -26,6 +26,8 @@ def handler(database):
                     return
                 if path == "/api/status":
                     result, code = store.status(), 200
+                elif path == "/api/notices":
+                    result, code = {"notices": store.notices()}, 200
                 elif path.startswith("/api/incidents/"):
                     try:
                         result, code = store.get(path.removeprefix("/api/incidents/")), 200

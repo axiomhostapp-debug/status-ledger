@@ -59,16 +59,44 @@ read transaction so a concurrent writer cannot mix old state with new history.
 The status is degraded while **any** incident is unresolved, so closing
 one incident cannot hide another. Times are UTC; integer event order avoids ties.
 
+## Informational notices
+
+Not every update is an outage. Notices have their own table, IDs and publication
+timestamps. They never create incident events, count as active incidents, or change
+service status. Neither notices nor incidents represent measured uptime.
+
+```sh
+python cli.py notice 'Demo DNS' 'Documentation updated' 'New setup examples are available.'
+python cli.py notices
+curl http://127.0.0.1:8080/api/notices
+```
+
+The dashboard labels incident updates and informational notices separately. An
+outage and a notice on the same date retain their individual UTC timestamps;
+publishing a notice cannot hide an unresolved outage. The existing status JSON
+response is unchanged; notices are exposed through their own endpoint.
+
+## Database upgrades
+
+`migrations.py` uses SQLite `PRAGMA user_version`. Opening a ledger upgrades it
+automatically under a single immediate transaction. Version 1 records the original
+incident/event schema, including databases written before schema versioning existed.
+Version 2 adds notices. Existing incidents and timestamps are preserved. A failed
+upgrade rolls back both schema changes and the version marker. Concurrent openers
+recheck the version after taking the write lock. Future schema versions are rejected,
+not silently downgraded. Back up a valuable database before upgrading; this demo
+provides no downgrade command or backup manager.
+
 ## Boundaries and next steps
 
 This is a local demonstration, not a production status platform. The standard
 library server is deliberately single-threaded and must not be exposed publicly.
-It has no authentication, migrations, notifications, uptime calculation, pagination,
+It has no authentication, notifications, uptime calculation, pagination,
 severity levels, or service registry. Database files must remain trusted and local.
 Event history is append-only through this code, not cryptographically tamper-proof.
 Tests inject reported failures; they do not establish power-loss durability.
 
-Next useful changes: a versioned schema migration, paginated incident history,
+Next useful changes: paginated incident history,
 and sustained concurrent-writer stress tests. The current race test verifies two
 competing connections with the same expected version: exactly one commits. A public deployment would need a production
 HTTP server, access controls, operational monitoring and an explicit data policy.

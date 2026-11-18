@@ -3,6 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
+from migrations import migrate
 
 STATES = ("investigating", "identified", "monitoring", "resolved")
 NEXT = {"investigating": {"identified", "resolved"},
@@ -19,14 +20,11 @@ class Ledger:
         self.db = sqlite3.connect(path, timeout=5)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
-        self.db.executescript('''
-        CREATE TABLE IF NOT EXISTS incidents (
-          id TEXT PRIMARY KEY, service TEXT NOT NULL, title TEXT NOT NULL,
-          state TEXT NOT NULL, version INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS events (
-          sequence INTEGER PRIMARY KEY, incident_id TEXT NOT NULL REFERENCES incidents(id),
-          state TEXT NOT NULL, message TEXT NOT NULL, at TEXT NOT NULL);
-        ''')
+        try:
+            migrate(self.db)
+        except Exception:
+            self.db.close()
+            raise
 
     def close(self):
         self.db.close()
@@ -96,3 +94,16 @@ class Ledger:
         rows = [dict(r) for r in self.db.execute("SELECT * FROM incidents ORDER BY rowid DESC")]
         return {"status": "degraded" if any(r["state"] != "resolved" for r in rows) else "operational",
                 "incidents": rows}
+
+    def publish_notice(self, service, title, message):
+        """Record information only; notices never modify incident or service state."""
+        notice = dict(id=uuid4().hex, service=self._text(service, 80),
+                      title=self._text(title, 160), message=self._text(message, 2000),
+                      published_at=datetime.now(timezone.utc).isoformat())
+        with self.db:
+            self.db.execute("INSERT INTO notices VALUES (:id,:service,:title,:message,:published_at)", notice)
+        return notice
+
+    def notices(self):
+        return [dict(row) for row in self.db.execute(
+            "SELECT * FROM notices ORDER BY published_at DESC, rowid DESC")]

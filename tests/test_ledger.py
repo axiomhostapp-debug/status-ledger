@@ -130,6 +130,7 @@ class HTTPTests(unittest.TestCase):
             path = str(Path(directory) / "http.sqlite3")
             store = Ledger(path)
             item = store.create("Demo", "Synthetic outage", "Test only")
+            notice = store.publish_notice("Demo", "Information", "No service impact")
             store.close()
             server = HTTPServer(("127.0.0.1", 0), handler(path))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -143,6 +144,8 @@ class HTTPTests(unittest.TestCase):
                 with urlopen(base + "/api/status", timeout=3) as response:
                     self.assertEqual(json.load(response)["status"], "degraded")
                     self.assertEqual(response.headers["Cache-Control"], "no-store")
+                with urlopen(base + "/api/notices", timeout=3) as response:
+                    self.assertEqual(json.load(response)["notices"], [notice])
                 with urlopen(base + "/api/incidents/" + item["id"], timeout=3) as response:
                     self.assertEqual(json.load(response)["id"], item["id"])
                 for path in ("/missing", "/api/incidents/missing"):
